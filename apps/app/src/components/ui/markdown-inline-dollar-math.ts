@@ -11,6 +11,7 @@ import type { Processor } from "unified";
 
 const DOLLAR = 36;
 const BACKSLASH = 92;
+const BACKTICK = 96;
 
 function isWhitespace(code: Code): boolean {
   return code === null || code < 0 || code === 32;
@@ -65,6 +66,7 @@ function tokenizeInlineDollarMath(
   }
 
   function data(code: Code): State | undefined {
+    if (code === BACKTICK) return nok(code);
     if (code === null || code === DOLLAR || isLineEnding(code)) {
       effects.exit("mathTextData");
       return between(code);
