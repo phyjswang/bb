@@ -772,16 +772,40 @@ describe("MarkdownPreview", () => {
     expect(container.querySelector(".katex-display")).toBeNull();
   });
 
-  it("leaves single-dollar spans as literal text", () => {
+  it("renders single-dollar inline math with KaTeX", async () => {
     const { container } = render(
-      <MarkdownPreview
-        content={"It went from $5 to $10 last week, so $x$ stays literal."}
-      />,
+      <MarkdownPreview content={"Energy is $E = mc^2$ and $x$, not $$y$$."} />,
     );
 
+    await waitFor(() =>
+      expect(container.querySelectorAll(".katex")).toHaveLength(3),
+    );
+    expect(container.querySelector(".katex-display")).toBeNull();
+  });
+
+  it("keeps a dollar amount literal beside single-dollar math", async () => {
+    const { container } = render(
+      <MarkdownPreview content={"It costs $5 and $\\alpha$ more."} />,
+    );
+
+    await waitFor(() =>
+      expect(container.querySelectorAll(".katex")).toHaveLength(1),
+    );
+    expect(container.textContent).toContain("It costs $5 and ");
+  });
+
+  it.each([
+    ["It went from $5 to $10 last week.", "$5 to $10"],
+    ["Pay $5, then $10.", "$5, then $10"],
+    ["Between $20,000 and $30,000 a year.", "$20,000 and $30,000"],
+    ["A $5/$10 split.", "$5/$10"],
+    ["Spaced $ x $ stays literal.", "$ x $"],
+    ["Inline `$x$` code stays literal.", "$x$"],
+  ])("leaves %j as literal text", (content, literal) => {
+    const { container } = render(<MarkdownPreview content={content} />);
+
     expect(container.querySelector(".katex")).toBeNull();
-    expect(container.textContent).toContain("$5 to $10");
-    expect(container.textContent).toContain("$x$");
+    expect(container.textContent).toContain(literal);
   });
 
   it("leaves escaped dollar amounts as literal text", () => {
