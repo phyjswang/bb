@@ -291,11 +291,11 @@ export function AppSidebar({
           >
             <div
               className={cn(
-                "flex shrink-0 items-center justify-center pt-2 pb-(--bb-frame-footer-inset)",
+                "flex shrink-0 items-center justify-center pt-2",
                 NAV_RAIL_WIDTH_CLASS,
-                isFramed && "border-b border-transparent",
-                !isFramed &&
-                  "bg-surface-recessed -mb-[env(safe-area-inset-bottom)] pb-[calc(var(--bb-frame-footer-inset)_+_env(safe-area-inset-bottom))]",
+                isFramed
+                  ? "box-content h-(--bb-window-footer-row-height) border-b border-transparent"
+                  : "bg-surface-recessed -mb-[env(safe-area-inset-bottom)] pb-[calc(var(--bb-frame-footer-inset)_+_env(safe-area-inset-bottom))]",
               )}
             >
               {railFooter}
@@ -309,7 +309,12 @@ export function AppSidebar({
             >
               <SidebarFooter
                 hidden={isBodyHidden}
-                className="w-full justify-center pb-(--bb-frame-footer-inset) pl-(--bb-frame-footer-inset)"
+                className={cn(
+                  "w-full justify-center pl-(--bb-frame-footer-inset)",
+                  isFramed
+                    ? "box-content h-(--bb-window-footer-row-height) pb-0 pointer-fine:pl-[calc(var(--bb-frame-footer-inset)_+_(2rem_-_var(--bb-title-bar-control-size))/2)] pointer-fine:[&_[data-sidebar=menu-button]]:size-(--bb-title-bar-control-size) pointer-fine:[&_[data-sidebar=menu]]:gap-[calc(0.25rem_+_2rem_-_var(--bb-title-bar-control-size))]"
+                    : "pb-(--bb-frame-footer-inset)",
+                )}
               >
                 <SidebarMenu
                   className={cn(
