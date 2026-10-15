@@ -291,11 +291,11 @@ export function AppSidebar({
           >
             <div
               className={cn(
-                "flex shrink-0 items-center justify-center pt-2 pb-1.5",
+                "flex shrink-0 items-center justify-center pt-2 pb-(--bb-frame-footer-inset)",
                 NAV_RAIL_WIDTH_CLASS,
                 isFramed && "border-b border-transparent",
                 !isFramed &&
-                  "bg-surface-recessed -mb-[env(safe-area-inset-bottom)] pb-[calc(0.375rem_+_env(safe-area-inset-bottom))]",
+                  "bg-surface-recessed -mb-[env(safe-area-inset-bottom)] pb-[calc(var(--bb-frame-footer-inset)_+_env(safe-area-inset-bottom))]",
               )}
             >
               {railFooter}
@@ -309,7 +309,7 @@ export function AppSidebar({
             >
               <SidebarFooter
                 hidden={isBodyHidden}
-                className="w-full justify-center pb-1.5 pl-1.5"
+                className="w-full justify-center pb-(--bb-frame-footer-inset) pl-(--bb-frame-footer-inset)"
               >
                 <SidebarMenu
                   className={cn(
