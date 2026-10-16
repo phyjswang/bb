@@ -143,6 +143,20 @@ async function generatedMonochromePng(sourceFile) {
     .toBuffer();
 }
 
+async function samePixels(existing, content) {
+  const [a, b] = await Promise.all(
+    [existing, content].map((buffer) =>
+      sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+    ),
+  ).catch(() => [null, null]);
+  return (
+    a !== null &&
+    a.info.width === b.info.width &&
+    a.info.height === b.info.height &&
+    a.data.equals(b.data)
+  );
+}
+
 async function writeOrCheck(fileName, content) {
   const filePath = join(publicDir, fileName);
   const existing = await readFile(filePath).catch((error) => {
@@ -150,6 +164,13 @@ async function writeOrCheck(fileName, content) {
     throw error;
   });
   if (existing?.equals(content)) return;
+  if (
+    existing &&
+    fileName.endsWith(".png") &&
+    (await samePixels(existing, content))
+  ) {
+    return;
+  }
   if (checkOnly) {
     mismatches.push(fileName);
     return;
