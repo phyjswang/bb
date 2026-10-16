@@ -45,7 +45,7 @@ vi.mock("@/hooks/queries/environment-queries", () => ({
 
 const noop = () => {};
 
-function Harness() {
+function Harness({ threadIds }: { threadIds?: readonly [string, string] }) {
   const documents = ["reading.md", "short.md"].map((path) =>
     createWorkspaceFilePreviewFixedPanelTab({
       environmentId: "env_scroll",
@@ -63,8 +63,12 @@ function Harness() {
   );
   const [activeId, setActiveId] = useState(documents[0].id);
   const [closed, setClosed] = useState(false);
+  const [threadIndex, setThreadIndex] = useState<0 | 1>(0);
   const tabs: SecondaryPanelRenderableTab[] = documents
-    .filter((document) => !closed || document.path !== "reading.md")
+    .filter(
+      (document) =>
+        (!closed && threadIndex === 0) || document.path !== "reading.md",
+    )
     .map((document) => ({
       tab: document,
       label: document.path,
@@ -119,6 +123,14 @@ function Harness() {
       >
         Reopen document
       </button>
+      <button
+        onClick={() => {
+          setThreadIndex(threadIndex === 0 ? 1 : 0);
+          setActiveId(documents[threadIndex === 0 ? 1 : 0].id);
+        }}
+      >
+        Switch thread
+      </button>
       <PanelGroup direction="horizontal">
         <ThreadSecondaryPanel
           activeTab={tabs.find((tab) => tab.tab.id === activeId)?.tab ?? null}
@@ -135,6 +147,7 @@ function Harness() {
           onToggleConversationCollapse={noop}
           isConversationCollapsed={false}
           renderAsDrawer={false}
+          splitPanelStateId={threadIds?.[threadIndex]}
           renderBrowserDeck={(active) =>
             active ? <div>Browser content</div> : null
           }
@@ -144,12 +157,12 @@ function Harness() {
   );
 }
 
-function renderHarness() {
+function renderHarness(threadIds?: readonly [string, string]) {
   const { wrapper: Wrapper } = createQueryClientTestHarness();
   const content = () => (
     <Wrapper>
       <TooltipProvider>
-        <Harness />
+        <Harness threadIds={threadIds} />
       </TooltipProvider>
     </Wrapper>
   );
@@ -235,6 +248,15 @@ describe("Markdown reading position in open secondary-panel tabs", () => {
     scrollTo(0);
     loading.current = false;
     harness.rerender(harness.content());
+    expect(scrollContainer().scrollTop).toBe(780);
+  });
+
+  it("retains position after switching to another thread and back", () => {
+    renderHarness(["thr_scroll_a", "thr_scroll_b"]);
+    scrollTo(780);
+    selectTab("Switch thread");
+    expect(screen.queryByRole("button", { name: "reading.md" })).toBeNull();
+    selectTab("Switch thread");
     expect(scrollContainer().scrollTop).toBe(780);
   });
 

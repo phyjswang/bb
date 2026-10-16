@@ -48,7 +48,10 @@ import { SecondaryPanelHostLayoutContext } from "./SecondaryPanelHostLayoutConte
 import { MobilePanelTabPager } from "./MobilePanelTabPager";
 import { SecondaryPanelTabStrip } from "./SecondaryPanelTabStrip";
 import { ImageTabLightboxProvider } from "./ImageTabLightboxContext";
-import { FilePreviewScrollPositionContext } from "./filePreviewScrollPositionContext";
+import {
+  FilePreviewScrollPositionContext,
+  getPanelStateFilePreviewScrollPositions,
+} from "./filePreviewScrollPositionContext";
 import type {
   MarketplacePluginDetailPanelTab,
   SecondaryPanelPaneRenderContext,
@@ -290,9 +293,13 @@ function ThreadSecondaryPanelContent({
     () => tabs.filter((tab) => tab.isHidden !== true),
     [tabs],
   );
-  const [filePreviewScrollPositions] = useState(
+  const [instanceFilePreviewScrollPositions] = useState(
     () => new Map<string, { scrollTop: number }>(),
   );
+  const filePreviewScrollPositions =
+    splitPanelStateId === undefined
+      ? instanceFilePreviewScrollPositions
+      : getPanelStateFilePreviewScrollPositions(splitPanelStateId);
   useLayoutEffect(() => {
     const openTabIds = new Set(tabs.map((tab) => tab.tab.id));
     for (const tabId of filePreviewScrollPositions.keys()) {
