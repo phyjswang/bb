@@ -25,8 +25,40 @@ import {
   useSidebar,
   useSidebarKeepsCollapsedRail,
 } from "./sidebar";
+import { setCompactSecondaryPanelSwipeOpening } from "./secondary-panel-shelf-visibility";
+import { buildBridgeInjectionScript } from "@bb/mobile-bridge";
+import { resetNativeShellForTests } from "@/lib/native-shell/native-shell";
+
+function installNativeShell() {
+  Object.defineProperty(window, "ReactNativeWebView", {
+    configurable: true,
+    value: { postMessage: () => {} },
+  });
+  // eslint-disable-next-line no-new-func
+  new Function(
+    "window",
+    buildBridgeInjectionScript({
+      bridgeVersion: 2,
+      appVersion: "0.46.1",
+      platform: "ios",
+      profileMode: "direct",
+      secureContext: true,
+      safeArea: { top: 0, right: 0, bottom: 0, left: 0 },
+      capabilities: [],
+      nativeDownloads: true,
+    }),
+  )(window);
+  resetNativeShellForTests();
+}
+
+function uninstallNativeShell() {
+  Reflect.deleteProperty(window, "ReactNativeWebView");
+  Reflect.deleteProperty(window, "bb");
+  resetNativeShellForTests();
+}
 
 afterEach(() => {
+  uninstallNativeShell();
   cleanup();
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -1101,6 +1133,51 @@ describe("mobile sidebar interrupted swipe sessions", () => {
     },
   );
 
+  it.each(["touch", "pointer"] as const)(
+    "ignores a %s swipe that starts in the browser edge strip",
+    (kind) => {
+      vi.useFakeTimers();
+      renderSelectableSwipeHarness();
+      const prose = screen.getByText("Selectable message prose");
+
+      if (kind === "touch") {
+        fireTouch(prose, "touchstart", createTouch(8, 160));
+        fireTouch(window, "touchmove", createTouch(60, 160));
+        fireTouchEnd(window, createTouch(190, 160));
+      } else {
+        firePointer(prose, "pointerdown", 8, 160);
+        firePointer(window, "pointermove", 60, 160);
+        firePointer(window, "pointerup", 190, 160);
+      }
+
+      settleMobileToggle();
+      expect(getMobilePanel()?.dataset.state).not.toBe("open");
+    },
+  );
+
+  it.each(["touch", "pointer"] as const)(
+    "opens from a %s swipe that starts at the screen edge inside the native shell",
+    (kind) => {
+      vi.useFakeTimers();
+      installNativeShell();
+      renderSelectableSwipeHarness();
+      const prose = screen.getByText("Selectable message prose");
+
+      if (kind === "touch") {
+        fireTouch(prose, "touchstart", createTouch(2, 160));
+        fireTouch(window, "touchmove", createTouch(60, 160));
+        fireTouchEnd(window, createTouch(190, 160));
+      } else {
+        firePointer(prose, "pointerdown", 2, 160);
+        firePointer(window, "pointermove", 60, 160);
+        firePointer(window, "pointerup", 190, 160);
+      }
+
+      settleMobileToggle();
+      expect(getMobilePanel()?.dataset.state).toBe("open");
+    },
+  );
+
   it("closes a short swipe that pauses before release", () => {
     vi.useFakeTimers();
     renderSelectableSwipeHarness();
@@ -1223,6 +1300,20 @@ describe("mobile sidebar text-selection arbitration", () => {
 
     expect(getMobilePanel()?.dataset.state).toBe("open");
     expect(getMobilePanel()?.textContent).toContain("Sidebar content");
+  });
+
+  it("yields a right swipe while the right panel is being swiped open", () => {
+    renderSelectableSwipeHarness();
+    const prose = screen.getByText("Selectable message prose");
+
+    setCompactSecondaryPanelSwipeOpening(true);
+    try {
+      fireTouch(prose, "touchstart", createTouch(120, 160));
+      fireTouch(window, "touchmove", createTouch(260, 164));
+      expect(getMobilePanel()?.dataset.state).toBe("closed");
+    } finally {
+      setCompactSecondaryPanelSwipeOpening(false);
+    }
   });
 
   it("defers the horizontal-scroll-region probe until horizontal intent", () => {
