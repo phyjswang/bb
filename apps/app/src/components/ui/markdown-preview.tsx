@@ -477,10 +477,14 @@ function resolveMarkdownLocalFileTarget(
   absolute: MarkdownAbsoluteLocalFileLinkRouting,
   relative: MarkdownRelativeLocalFileLinkRouting | undefined,
 ): ResolvedMarkdownLocalFileTarget | null {
-  const absoluteLink = parseLocalFileHref({
-    absoluteLinks: absolute,
-    href: value,
-  });
+  const absoluteLink =
+    parseLocalFileHref({ absoluteLinks: absolute, href: value }) ??
+    (absolute.kind === "trusted-host" && relative !== undefined
+      ? parseLocalFileHref({
+          absoluteLinks: { kind: "contained", rootPath: relative.rootPath },
+          href: value,
+        })
+      : null);
   if (absoluteLink !== null) {
     return {
       href: value,
@@ -500,7 +504,10 @@ function resolveMarkdownLocalFileTarget(
     return null;
   }
   const relativeLink = parseLocalFileHref({
-    absoluteLinks: absolute,
+    absoluteLinks:
+      absolute.kind === "trusted-host"
+        ? { kind: "contained", rootPath: relative.rootPath }
+        : absolute,
     href: resolvedHref,
   });
   return relativeLink === null
@@ -550,11 +557,7 @@ function buildLocalAwareUrlTransform({
   };
 }
 
-function hasMarkdownFileExtension(path: string): boolean {
-  return /\.(?:md|markdown)$/iu.test(path);
-}
-
-function resolveInlineCodeMarkdownFileHref({
+function resolveInlineCodeFileHref({
   codeText,
   localFileRouting,
 }: {
@@ -574,7 +577,13 @@ function resolveInlineCodeMarkdownFileHref({
     localFileRouting.absoluteLinks,
     localFileRouting.relativeLinks,
   );
-  return target !== null && hasMarkdownFileExtension(target.link.path)
+  if (target === null) {
+    return null;
+  }
+
+  return /[/\\]/u.test(codeText) ||
+    /\.[\p{L}\p{N}_-]+$/u.test(target.link.path) ||
+    target.link.lineRange !== null
     ? target.href
     : null;
 }
@@ -652,11 +661,12 @@ function MarkdownAnchor({
   });
   const isAppRouteHref = isMarkdownAppRouteHref({ href: rewrittenHref });
   const localFileLink =
-    !isAppRouteHref && localFileRouting
-      ? parseLocalFileHref({
-          absoluteLinks: localFileRouting.absoluteLinks,
-          href: rewrittenHref,
-        })
+    !isAppRouteHref && localFileRouting && rewrittenHref
+      ? (resolveMarkdownLocalFileTarget(
+          rewrittenHref,
+          localFileRouting.absoluteLinks,
+          localFileRouting.relativeLinks,
+        )?.link ?? null)
       : null;
   const anchorHref = buildLocalFileAnchorHref(localFileLink, rewrittenHref);
   const getContextMenuItems = useContext(MarkdownLocalFileContextMenuContext);
@@ -796,7 +806,10 @@ function MarkdownCodeBlock({
 
   return (
     <div className="my-2 overflow-hidden rounded-md border border-border bg-surface-recessed">
-      <div className="flex items-center justify-between pl-3 pr-1.5 pt-1.5">
+      <div
+        data-clipboard-ignore
+        className="flex items-center justify-between pl-3 pr-1.5 pt-1.5"
+      >
         <span className="font-mono text-xs uppercase text-muted-foreground">
           {language ?? ""}
         </span>
@@ -882,14 +895,14 @@ function MarkdownCode({
     );
   }
 
-  const markdownFileHref = resolveInlineCodeMarkdownFileHref({
+  const localFileHref = resolveInlineCodeFileHref({
     codeText,
     localFileRouting: linkRouting?.localFile,
   });
-  if (markdownFileHref !== null) {
+  if (localFileHref !== null) {
     return (
       <MarkdownAnchor
-        href={markdownFileHref}
+        href={localFileHref}
         linkRouting={linkRouting}
         rewriteLocalhostLinks={rewriteLocalhostLinks}
       >
@@ -1032,7 +1045,6 @@ function MarkdownTable({ children }: MarkdownTableProps) {
         marginInline: `calc((100% - ${MARKDOWN_TABLE_BREAKOUT_WIDTH}) / 2)`,
       }}
     >
-      {}
       <div
         className="w-max max-w-full overflow-x-auto"
         style={{
