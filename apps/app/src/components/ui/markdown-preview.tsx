@@ -41,6 +41,7 @@ import { ImageLightbox, getWrappedImageIndex } from "./image-lightbox.js";
 import { InlineImageGalleryContext } from "./inline-image-gallery-context.js";
 import { remarkInlineDollarMath } from "./markdown-inline-dollar-math.js";
 import { normalizeMathFences } from "./markdown-math-fences.js";
+import { MARKDOWN_TABLE_START_OFFSET_VARIABLE } from "./markdown-table-breakout.js";
 import {
   markdownMayContainMath,
   useRehypeKatex,
@@ -294,6 +295,7 @@ type MarkdownRemarkPlugins = NonNullable<ReactMarkdownOptions["remarkPlugins"]>;
 
 const MARKDOWN_TABLE_BREAKOUT_LIMIT_VARIABLE = "--md-table-breakout-max";
 const MARKDOWN_TABLE_BREAKOUT_WIDTH = `max(100%, min(1100px, 100cqw - 2rem, var(${MARKDOWN_TABLE_BREAKOUT_LIMIT_VARIABLE}, 100cqw)))`;
+const MARKDOWN_TABLE_BREAKOUT_START_MARGIN = `var(${MARKDOWN_TABLE_START_OFFSET_VARIABLE}, calc((100% - ${MARKDOWN_TABLE_BREAKOUT_WIDTH}) / 2))`;
 const MARKDOWN_CONTENT_WIDTH_VARIABLE = "--md-content-w";
 const MARKDOWN_SOURCE_COLOR_SCHEME_MEDIA_PATTERN =
   /^\(\s*prefers-color-scheme\s*:\s*(dark|light)\s*\)$/iu;
@@ -581,7 +583,7 @@ function resolveInlineCodeFileHref({
     return null;
   }
 
-  return /[/\\]/u.test(codeText) ||
+  return /^(?:[/\\]|\.{1,2}[/\\]|[a-zA-Z]:[/\\]|file:\/\/)/u.test(codeText) ||
     /\.[\p{L}\p{N}_-]+$/u.test(target.link.path) ||
     target.link.lineRange !== null
     ? target.href
@@ -1039,16 +1041,19 @@ function MarkdownTable({ children }: MarkdownTableProps) {
   return (
     <div
       ref={breakoutRef}
-      className="my-2 flex justify-center"
+      className="my-2"
       style={{
         width: MARKDOWN_TABLE_BREAKOUT_WIDTH,
-        marginInline: `calc((100% - ${MARKDOWN_TABLE_BREAKOUT_WIDTH}) / 2)`,
+        marginInlineStart: MARKDOWN_TABLE_BREAKOUT_START_MARGIN,
+        marginInlineEnd: `calc(100% - ${MARKDOWN_TABLE_BREAKOUT_WIDTH} - ${MARKDOWN_TABLE_BREAKOUT_START_MARGIN})`,
       }}
     >
       <div
         className="w-max max-w-full overflow-x-auto"
         style={{
           minWidth: `min(var(${MARKDOWN_CONTENT_WIDTH_VARIABLE}, 100%), 100%)`,
+          marginInlineStart: `var(${MARKDOWN_TABLE_START_OFFSET_VARIABLE}, auto)`,
+          marginInlineEnd: "auto",
         }}
       >
         <table className="border border-border">{children}</table>
@@ -1691,10 +1696,15 @@ function readMarkdownTableBreakoutLimit({
   }
   const clipLeft = clip.getBoundingClientRect().left + clip.clientLeft;
   const clipRight = clipLeft + clip.clientWidth;
-  const room = Math.max(
-    0,
-    Math.min(parentLeft - clipLeft, clipRight - parentRight),
-  );
+  const endRoom = Math.max(0, clipRight - parentRight);
+  if (
+    parentStyle
+      .getPropertyValue(MARKDOWN_TABLE_START_OFFSET_VARIABLE)
+      .trim() !== ""
+  ) {
+    return { kind: "set", value: `calc(${parentWidth + endRoom}px - 1rem)` };
+  }
+  const room = Math.min(Math.max(0, parentLeft - clipLeft), endRoom);
   return { kind: "set", value: `${parentWidth + 2 * room}px` };
 }
 

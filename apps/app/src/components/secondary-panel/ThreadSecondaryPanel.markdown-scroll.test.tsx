@@ -45,7 +45,13 @@ vi.mock("@/hooks/queries/environment-queries", () => ({
 
 const noop = () => {};
 
-function Harness({ threadIds }: { threadIds?: readonly [string, string] }) {
+function Harness({
+  panelStateId,
+  browserOnly = false,
+}: {
+  panelStateId?: string;
+  browserOnly?: boolean;
+}) {
   const documents = ["reading.md", "short.md"].map((path) =>
     createWorkspaceFilePreviewFixedPanelTab({
       environmentId: "env_scroll",
@@ -63,11 +69,9 @@ function Harness({ threadIds }: { threadIds?: readonly [string, string] }) {
   );
   const [activeId, setActiveId] = useState(documents[0].id);
   const [closed, setClosed] = useState(false);
-  const [threadIndex, setThreadIndex] = useState<0 | 1>(0);
   const tabs: SecondaryPanelRenderableTab[] = documents
     .filter(
-      (document) =>
-        (!closed && threadIndex === 0) || document.path !== "reading.md",
+      (document) => !browserOnly && (!closed || document.path !== "reading.md"),
     )
     .map((document) => ({
       tab: document,
@@ -123,16 +127,9 @@ function Harness({ threadIds }: { threadIds?: readonly [string, string] }) {
       >
         Reopen document
       </button>
-      <button
-        onClick={() => {
-          setThreadIndex(threadIndex === 0 ? 1 : 0);
-          setActiveId(documents[threadIndex === 0 ? 1 : 0].id);
-        }}
-      >
-        Switch thread
-      </button>
       <PanelGroup direction="horizontal">
         <ThreadSecondaryPanel
+          splitPanelStateId={panelStateId}
           activeTab={tabs.find((tab) => tab.tab.id === activeId)?.tab ?? null}
           canUseGitUi={false}
           fixedTabs={[]}
@@ -147,7 +144,6 @@ function Harness({ threadIds }: { threadIds?: readonly [string, string] }) {
           onToggleConversationCollapse={noop}
           isConversationCollapsed={false}
           renderAsDrawer={false}
-          splitPanelStateId={threadIds?.[threadIndex]}
           renderBrowserDeck={(active) =>
             active ? <div>Browser content</div> : null
           }
@@ -157,12 +153,12 @@ function Harness({ threadIds }: { threadIds?: readonly [string, string] }) {
   );
 }
 
-function renderHarness(threadIds?: readonly [string, string]) {
+function renderHarness(props: Parameters<typeof Harness>[0] = {}) {
   const { wrapper: Wrapper } = createQueryClientTestHarness();
-  const content = () => (
+  const content = (nextProps = props) => (
     <Wrapper>
       <TooltipProvider>
-        <Harness threadIds={threadIds} />
+        <Harness {...nextProps} />
       </TooltipProvider>
     </Wrapper>
   );
@@ -209,6 +205,36 @@ afterEach(() => {
 });
 
 describe("Markdown reading position in open secondary-panel tabs", () => {
+  it.each(["different tabs", "shared tab ids", "panel remount"])(
+    "restores the originating thread after %s",
+    (transition) => {
+      const panelStateId = `reading-origin-${transition}`;
+      const harness = renderHarness({ panelStateId });
+      scrollTo(640);
+      if (transition === "panel remount") {
+        harness.unmount();
+        renderHarness({ panelStateId });
+      } else {
+        harness.rerender(
+          harness.content({
+            panelStateId: `reading-other-${transition}`,
+            browserOnly: transition === "different tabs",
+          }),
+        );
+        if (transition === "shared tab ids") {
+          expect(scrollContainer().scrollTop).toBe(0);
+          scrollTo(160);
+        } else {
+          expect(
+            document.querySelector("[data-file-preview-scroll-container]"),
+          ).toBeNull();
+        }
+        harness.rerender(harness.content());
+      }
+      expect(scrollContainer().scrollTop).toBe(640);
+    },
+  );
+
   it.each(["tab", "hyperlink"])(
     "retains position after leaving through a %s",
     (navigation) => {
@@ -251,20 +277,14 @@ describe("Markdown reading position in open secondary-panel tabs", () => {
     expect(scrollContainer().scrollTop).toBe(780);
   });
 
-  it("retains position after switching to another thread and back", () => {
-    renderHarness(["thr_scroll_a", "thr_scroll_b"]);
-    scrollTo(780);
-    selectTab("Switch thread");
-    expect(screen.queryByRole("button", { name: "reading.md" })).toBeNull();
-    selectTab("Switch thread");
-    expect(scrollContainer().scrollTop).toBe(780);
-  });
-
-  it("forgets a closed document even when reopening uses the same tab id", () => {
-    renderHarness();
-    scrollTo(780);
-    fireEvent.click(screen.getByRole("button", { name: "Close document" }));
-    fireEvent.click(screen.getByRole("button", { name: "Reopen document" }));
-    expect(scrollContainer().scrollTop).toBe(0);
-  });
+  it.each([undefined, "reading-close"])(
+    "forgets a closed document even when reopening uses the same tab id (%s)",
+    (panelStateId) => {
+      renderHarness({ panelStateId });
+      scrollTo(780);
+      fireEvent.click(screen.getByRole("button", { name: "Close document" }));
+      fireEvent.click(screen.getByRole("button", { name: "Reopen document" }));
+      expect(scrollContainer().scrollTop).toBe(0);
+    },
+  );
 });

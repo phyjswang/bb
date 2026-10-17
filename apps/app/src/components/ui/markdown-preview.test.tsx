@@ -13,6 +13,7 @@ import {
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { highlightMarkdownCode } from "./markdown-code-highlight";
 import { MarkdownPreview } from "./markdown-preview";
+import { MARKDOWN_TABLE_START_OFFSET_VARIABLE } from "./markdown-table-breakout";
 import {
   MarkdownLocalFileContextMenuContext,
   MarkdownLocalFileOpenTargetsContext,
@@ -229,6 +230,29 @@ describe("MarkdownPreview", () => {
       rootedBreakout?.style.getPropertyValue("--md-table-breakout-max"),
     ).toBe("300px");
     sheet.remove();
+    rooted.unmount();
+
+    const startAlignedSheet = document.createElement("style");
+    startAlignedSheet.textContent = `.start-aligned [data-markdown-preview] { ${MARKDOWN_TABLE_START_OFFSET_VARIABLE}: 0px; }`;
+    document.head.appendChild(startAlignedSheet);
+    const startAligned = render(
+      <div
+        className="start-aligned"
+        data-left="0"
+        data-width="1200"
+        style={{ overflowX: "hidden" }}
+      >
+        <MarkdownPreview content={"| A |\n| - |\n| B |"} />
+      </div>,
+    );
+    const startAlignedBreakout =
+      startAligned.container.querySelector("table")?.parentElement
+        ?.parentElement;
+    notifyResize();
+    expect(
+      startAlignedBreakout?.style.getPropertyValue("--md-table-breakout-max"),
+    ).toBe("calc(1100px - 1rem)");
+    startAlignedSheet.remove();
   });
 
   it("skips height-only resize events for tables", () => {
@@ -329,7 +353,8 @@ describe("MarkdownPreview", () => {
     ["src/app.ts:42", "/workspace/src/app.ts", 42],
     ["src/app.ts:42:3", "/workspace/src/app.ts", 42],
     ["package.json:12:3", "/workspace/package.json", 12],
-    ["scripts/run", "/workspace/scripts/run", null],
+    ["./scripts/run", "/workspace/scripts/run", null],
+    ["scripts/run:7", "/workspace/scripts/run", 7],
     ["/workspace/scripts/run", "/workspace/scripts/run", null],
     ["./scripts/run:7:2", "/workspace/scripts/run", 7],
     ["Dockerfile:8", "/workspace/Dockerfile", 8],
@@ -363,6 +388,10 @@ describe("MarkdownPreview", () => {
   );
 
   it.each([
+    "origin/main",
+    "...[origin/main]",
+    "feature/my-branch",
+    "scripts/run",
     "orange",
     "npm.test()",
     "cat src/app.ts",
